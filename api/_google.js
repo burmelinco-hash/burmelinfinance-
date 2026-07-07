@@ -4,11 +4,26 @@ const { google } = require('googleapis');
 const SHEET_ID = process.env.SHEET_ID || '1UG4WQG3vOiytArJT1U03CdQPwjPlMb9-3wy1OGzoLmw';
 const MOCK = !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY;
 
+// Tolerate the common ways a private key gets mangled when pasted into a host's
+// env-var UI: wrapping quotes, escaped "\n" instead of real newlines, stray CRs.
+function normalizePrivateKey(raw) {
+  let k = (raw || '').trim();
+  if ((k.startsWith('"') && k.endsWith('"')) || (k.startsWith("'") && k.endsWith("'"))) {
+    k = k.slice(1, -1).trim();
+  }
+  k = k.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n').replace(/\r\n/g, '\n');
+  return k;
+}
+
 function getSheetsClient() {
+  const key = normalizePrivateKey(process.env.GOOGLE_PRIVATE_KEY);
+  if (!key.includes('BEGIN PRIVATE KEY')) {
+    throw new Error('GOOGLE_PRIVATE_KEY looks malformed — paste the full key from the JSON, including the BEGIN/END lines.');
+  }
   const auth = new google.auth.JWT(
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     null,
-    (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    key,
     ['https://www.googleapis.com/auth/spreadsheets']
   );
   return google.sheets({ version: 'v4', auth });
