@@ -7,6 +7,7 @@ const RULES = {
   'Scan / QR Payment':         { fields: ['bankIn'],            hint: 'QR payment received at the shop (goes to the shared bank).' },
   'Credit Sale':               { fields: ['creditAmount'],      hint: 'Palladium → customer: goods given on credit, their debt goes UP. No cash moves now.' },
   'Customer Payment':          { fields: ['cashIn', 'bankIn'],  hint: 'Customer → Palladium: they pay their debt DOWN. Cash In if cash, Bank In if transfer.' },
+  'Credit Opening Balance':    { fields: ['creditAmount'],      hint: 'The debt a customer ALREADY owes when you start tracking. Sets their starting balance (recorded as a credit sale, noted “Opening balance”).' },
   'Supplier Pay':              { fields: ['cashOut', 'bankOut'], hint: 'Paying for stock/production. Use whichever account it left from.' },
   'Salary':                    { fields: ['cashOut', 'bankOut'], hint: 'Monthly staff salary. If paid from collected cash, use Shop = Palladium.' },
   'Wages':                     { fields: ['cashOut', 'bankOut'], hint: 'Daily helpers or casual staff.' },
@@ -21,7 +22,7 @@ const RULES = {
   'Collection to Bank':        { fields: ['cashOut', 'bankIn'], hint: 'Collected cash at Palladium deposited to the bank: fill BOTH Cash Out and Bank In.' },
   'Opening Balance':           { fields: ['cashIn', 'bankIn'],  hint: 'Only when setting up a shop for the first time.' },
 };
-const NEEDS_CUSTOMER = ['Credit Sale', 'Customer Payment'];
+const NEEDS_CUSTOMER = ['Credit Sale', 'Customer Payment', 'Credit Opening Balance'];
 const FIELD_LABELS = {
   cashIn: 'Cash In', bankIn: 'Bank In', cashOut: 'Cash Out', bankOut: 'Bank Out', creditAmount: 'Credit Sale Amount',
 };
@@ -126,6 +127,14 @@ function populateForm() {
       names.forEach((n) => { const o = document.createElement('option'); o.value = n; o.textContent = n; og.appendChild(o); });
       cat.appendChild(og);
     }
+    // App-only shortcut for setting a credit customer's starting debt.
+    const ogSetup = document.createElement('optgroup');
+    ogSetup.label = 'Setup';
+    const oOpen = document.createElement('option');
+    oOpen.value = 'Credit Opening Balance';
+    oOpen.textContent = 'Credit Opening Balance';
+    ogSetup.appendChild(oOpen);
+    cat.appendChild(ogSetup);
   }
   const shop = $('fShop');
   if (!shop.options.length) {
@@ -170,12 +179,21 @@ $('txForm').addEventListener('submit', async (e) => {
   const rule = RULES[category];
   if (!rule) return showToast('Pick a category first', 'error');
 
+  // "Credit Opening Balance" is an app-only shortcut. It's written to the sheet as a
+  // Credit Sale (what the Credit Aging tab counts), tagged in Notes so it stays distinguishable.
+  let apiCategory = category;
+  let notes = $('fNotes').value.trim();
+  if (category === 'Credit Opening Balance') {
+    apiCategory = 'Credit Sale';
+    if (!notes) notes = 'Opening balance';
+  }
+
   const body = {
-    category,
+    category: apiCategory,
     shop: $('fShop').value,
     customer: NEEDS_CUSTOMER.includes(category) ? $('fCustomer').value : '',
     date: $('fDate').value,
-    notes: $('fNotes').value.trim(),
+    notes,
   };
   let any = false;
   for (const f of rule.fields) {
