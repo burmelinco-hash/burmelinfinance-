@@ -5,8 +5,8 @@ const RULES = {
   'Retail Sale':               { fields: ['cashIn', 'bankIn'],  hint: 'Cash sales in Cash In, card/QR sales in Bank In. One row per shop per day.' },
   'Bank Received':             { fields: ['bankIn'],            hint: 'Money that arrived directly in the bank account.' },
   'Scan / QR Payment':         { fields: ['bankIn'],            hint: 'QR payment received at the shop (goes to the shared bank).' },
-  'Credit Sale':               { fields: ['creditAmount'],      hint: 'Customer takes goods on credit. No cash moves — their debt goes up. Shop is always Palladium.' },
-  'Customer Payment':          { fields: ['cashIn', 'bankIn'],  hint: 'Credit customer pays back. Cash In if cash, Bank In if transfer. Shop is always Palladium.' },
+  'Credit Sale':               { fields: ['creditAmount'],      hint: 'Palladium → customer: goods given on credit, their debt goes UP. No cash moves now.' },
+  'Customer Payment':          { fields: ['cashIn', 'bankIn'],  hint: 'Customer → Palladium: they pay their debt DOWN. Cash In if cash, Bank In if transfer.' },
   'Supplier Pay':              { fields: ['cashOut', 'bankOut'], hint: 'Paying for stock/production. Use whichever account it left from.' },
   'Salary':                    { fields: ['cashOut', 'bankOut'], hint: 'Monthly staff salary. If paid from collected cash, use Shop = Palladium.' },
   'Wages':                     { fields: ['cashOut', 'bankOut'], hint: 'Daily helpers or casual staff.' },
@@ -154,11 +154,12 @@ $('fCategory').addEventListener('change', () => {
       <span class="currency-wrap"><input type="number" inputmode="decimal" min="0" step="any" id="amt_${f}" placeholder="0"></span>
     </label>`).join('');
 
-  // customer row + shop lock for credit categories
+  // Credit rows are always Palladium <-> customer: show the customer, hide the redundant Shop.
   const needsCust = NEEDS_CUSTOMER.includes($('fCategory').value);
   $('rowCustomer').hidden = !needsCust;
-  if (needsCust) { $('fShop').value = 'Palladium'; }
-  $('fShop').disabled = needsCust;
+  $('rowShop').hidden = needsCust;
+  if (needsCust) $('fShop').value = 'Palladium';
+  $('fShop').disabled = false;
 
   $('ruleHint').textContent = rule.hint;
 });
