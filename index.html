@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a56db">
+<title>Burmelin Finance</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Burmelin Finance</h1>
+  <button id="refreshBtn" class="icon-btn" title="Refresh">&#8635;</button>
+</header>
+
+<!-- ============ DASHBOARD ============ -->
+<main id="page-dashboard" class="page">
+  <div id="loadState" class="load-state">Loading&hellip;</div>
+
+  <div id="dashContent" hidden>
+    <p id="mockBanner" class="mock-banner" hidden>Sample data &mdash; not connected to the sheet yet</p>
+
+    <section class="totals">
+      <div class="total-card cash">
+        <span class="label">Total Cash</span>
+        <span class="value" id="totalCash">&mdash;</span>
+      </div>
+      <div class="total-card bank">
+        <span class="label">Total Bank</span>
+        <span class="value" id="totalBank">&mdash;</span>
+      </div>
+      <div class="total-card grand">
+        <span class="label">Grand Total (Cash + Bank)</span>
+        <span class="value" id="totalGrand">&mdash;</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Shop Drawers <span class="hint">cash to collect</span></h2>
+      <ul id="shopList" class="rows"></ul>
+    </section>
+
+    <section class="card">
+      <h2>Credit Customers <span class="hint">they owe you</span></h2>
+      <ul id="creditList" class="rows"></ul>
+      <div class="row total-row">
+        <span>Total Credit</span>
+        <strong id="totalCredit">&mdash;</strong>
+      </div>
+    </section>
+
+    <p class="updated" id="updatedAt"></p>
+  </div>
+</main>
+
+<!-- ============ RECORD ============ -->
+<main id="page-record" class="page" hidden>
+  <form id="txForm" class="card form" autocomplete="off">
+    <label>
+      <span>Category</span>
+      <select id="fCategory" required>
+        <option value="" disabled selected>Choose what happened&hellip;</option>
+      </select>
+    </label>
+
+    <label>
+      <span>Shop</span>
+      <select id="fShop" required></select>
+    </label>
+
+    <label id="rowCustomer" hidden>
+      <span>Credit Customer</span>
+      <select id="fCustomer"></select>
+    </label>
+
+    <div id="amountFields"></div>
+
+    <label>
+      <span>Date</span>
+      <input type="date" id="fDate" required>
+    </label>
+
+    <label>
+      <span>Notes <em>(optional)</em></span>
+      <input type="text" id="fNotes" maxlength="200" placeholder="e.g. Nana employee salary">
+    </label>
+
+    <p id="ruleHint" class="rule-hint"></p>
+
+    <button type="submit" id="saveBtn" class="save-btn">Save Transaction</button>
+  </form>
+
+  <div id="toast" class="toast" hidden></div>
+</main>
+
+<!-- ============ NAV ============ -->
+<nav class="tabbar">
+  <button class="tab active" data-page="dashboard">
+    <span class="tab-icon">&#128202;</span>Dashboard
+  </button>
+  <button class="tab" data-page="record">
+    <span class="tab-icon">&#9998;</span>Record
+  </button>
+</nav>
+
+<script src="app.js"></script>
+</body>
+</html>
