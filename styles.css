@@ -147,6 +147,17 @@ body {
 .detail-title { font-size: 22px; font-weight: 800; margin-bottom: 2px; }
 .detail-sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 
+.detail-filter { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.detail-filter select {
+  width: 100%; font-size: 15px; padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: 10px; background: #fff; appearance: none;
+}
+.custom-range { display: flex; align-items: center; gap: 8px; }
+.custom-range input { flex: 1; min-width: 0; font-size: 15px; padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 10px; background: #fff; }
+.custom-range span { color: var(--muted); font-size: 13px; }
+
+.tx .amt-run { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 3px; }
+
 .detail-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
 .detail-summary .total-card { grid-column: auto; }
 .detail-summary .total-card.wide { grid-column: 1 / -1; }

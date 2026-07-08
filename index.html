@@ -102,6 +102,21 @@
   <h2 id="detailTitle" class="detail-title"></h2>
   <p id="detailSub" class="detail-sub"></p>
 
+  <div id="detailFilter" class="detail-filter" hidden>
+    <select id="detailPeriod">
+      <option value="all">All time</option>
+      <option value="month">This month</option>
+      <option value="lastmonth">Last month</option>
+      <option value="year">This year</option>
+      <option value="custom">Custom range&hellip;</option>
+    </select>
+    <div id="customRange" class="custom-range" hidden>
+      <input type="date" id="fromDate" aria-label="From date">
+      <span>to</span>
+      <input type="date" id="toDate" aria-label="To date">
+    </div>
+  </div>
+
   <section id="detailSummary" class="detail-summary"></section>
 
   <div class="card">
