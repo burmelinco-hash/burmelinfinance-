@@ -96,6 +96,26 @@
   <div id="toast" class="toast" hidden></div>
 </main>
 
+<!-- ============ DETAIL (per shop / per customer) ============ -->
+<main id="page-detail" class="page" hidden>
+  <button id="backBtn" class="back-btn">&#8592; Back</button>
+  <h2 id="detailTitle" class="detail-title"></h2>
+  <p id="detailSub" class="detail-sub"></p>
+
+  <section id="detailSummary" class="detail-summary"></section>
+
+  <div class="card">
+    <h2 id="detailListLabel">Transactions</h2>
+    <ul id="detailList" class="rows"></ul>
+    <p id="detailEmpty" class="load-state" hidden>No transactions yet.</p>
+  </div>
+
+  <button id="shareBtn" class="save-btn share-btn" hidden>&#128196; Share / Print statement</button>
+</main>
+
+<!-- printable statement (only visible when printing) -->
+<div id="printArea" class="print-only"></div>
+
 <!-- ============ NAV ============ -->
 <nav class="tabbar">
   <button class="tab active" data-page="dashboard">

@@ -55,6 +55,7 @@ document.querySelectorAll('.tab').forEach((btn) => {
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b === btn));
     $('page-dashboard').hidden = btn.dataset.page !== 'dashboard';
     $('page-record').hidden = btn.dataset.page !== 'record';
+    $('page-detail').hidden = true;
   });
 });
 
@@ -85,9 +86,9 @@ function renderDashboard(d) {
   $('totalGrand').textContent = fmt(d.totals.grand);
 
   $('shopList').innerHTML = d.shops.map((s) => `
-    <li><div class="row">
+    <li><div class="row tappable" data-shop="${esc(s.name)}">
       <span class="name">${esc(s.name)}</span>
-      <span class="amount ${s.cash < 0 ? 'neg' : 'pos'}">${fmt(s.cash)}</span>
+      <span class="amount ${s.cash < 0 ? 'neg' : 'pos'}">${fmt(s.cash)}<span class="chevron">›</span></span>
     </div></li>`).join('');
 
   $('creditList').innerHTML = d.credit.map((c) => {
@@ -99,9 +100,9 @@ function renderDashboard(d) {
     }
     if (c.balance === 0) { sub = 'settled'; overdue = false; }
     return `
-    <li><div class="row">
+    <li><div class="row tappable" data-customer="${esc(c.name)}">
       <span class="name">${esc(c.name)}<span class="sub ${overdue ? 'overdue' : ''}">${sub}</span></span>
-      <span class="amount ${c.balance < 0 ? 'neg' : 'pos'}">${fmt(c.balance)}</span>
+      <span class="amount ${c.balance < 0 ? 'neg' : 'pos'}">${fmt(c.balance)}<span class="chevron">›</span></span>
     </div></li>`;
   }).join('');
 
@@ -111,7 +112,135 @@ function renderDashboard(d) {
 
 function esc(s) { const el = document.createElement('span'); el.textContent = s; return el.innerHTML; }
 
-$('refreshBtn').addEventListener('click', loadDashboard);
+$('refreshBtn').addEventListener('click', () => { TX = null; loadDashboard(); });
+
+// ================= per-shop / per-customer detail =================
+let TX = null;
+async function loadTx(force) {
+  if (TX && !force) return TX;
+  const resp = await api('/api/transactions');
+  if (!resp.ok) throw new Error((await resp.json()).error || 'Server error');
+  TX = (await resp.json()).transactions;
+  return TX;
+}
+
+function fmtDate(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [y, m, d] = iso.split('-');
+  return `${+d}/${+m}/${y}`;
+}
+const byDateDesc = (a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.row - b.row);
+const byDateAsc = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.row - b.row);
+
+let currentDetail = null;
+
+async function openDetail(kind, name) {
+  currentDetail = { kind, name };
+  $('page-dashboard').hidden = true;
+  $('page-record').hidden = true;
+  $('page-detail').hidden = false;
+  window.scrollTo(0, 0);
+  $('detailTitle').textContent = name;
+  $('detailSub').textContent = 'Loading…';
+  $('detailSummary').innerHTML = '';
+  $('detailList').innerHTML = '';
+  $('detailEmpty').hidden = true;
+  $('shareBtn').hidden = kind !== 'customer';
+  try {
+    const tx = await loadTx();
+    if (kind === 'shop') renderShopDetail(name, tx.filter((t) => t.shop === name));
+    else renderCustomerDetail(name, tx.filter((t) => t.customer === name));
+  } catch (e) {
+    $('detailSub').textContent = 'Could not load: ' + e.message;
+  }
+}
+
+function renderShopDetail(name, rows) {
+  let cashIn = 0, cashOut = 0, bankIn = 0, bankOut = 0;
+  rows.forEach((t) => { cashIn += t.cashIn; cashOut += t.cashOut; bankIn += t.bankIn; bankOut += t.bankOut; });
+  $('detailSub').textContent = `${rows.length} transaction${rows.length === 1 ? '' : 's'}`;
+  $('detailListLabel').textContent = 'In & Out';
+  $('detailSummary').innerHTML = `
+    <div class="total-card in"><span class="label">Cash In</span><span class="value">${fmt(cashIn)}</span></div>
+    <div class="total-card out"><span class="label">Cash Out</span><span class="value">${fmt(cashOut)}</span></div>
+    <div class="total-card in"><span class="label">Bank In</span><span class="value">${fmt(bankIn)}</span></div>
+    <div class="total-card out"><span class="label">Bank Out</span><span class="value">${fmt(bankOut)}</span></div>
+    <div class="total-card grand wide"><span class="label">Net Cash in Drawer</span><span class="value">${fmt(cashIn - cashOut)}</span></div>`;
+  if (!rows.length) { $('detailEmpty').hidden = false; return; }
+  $('detailList').innerHTML = rows.slice().sort(byDateDesc).map((t) => {
+    const amts = [];
+    if (t.cashIn) amts.push(`<span class="amt in">+${fmt(t.cashIn)} cash</span>`);
+    if (t.bankIn) amts.push(`<span class="amt in">+${fmt(t.bankIn)} bank</span>`);
+    if (t.cashOut) amts.push(`<span class="amt out">−${fmt(t.cashOut)} cash</span>`);
+    if (t.bankOut) amts.push(`<span class="amt out">−${fmt(t.bankOut)} bank</span>`);
+    return `<li><div class="tx">
+      <div class="tx-left"><div class="tx-cat">${esc(t.category)}</div><div class="tx-meta">${fmtDate(t.date)}${t.notes ? ' · ' + esc(t.notes) : ''}</div></div>
+      <div class="tx-amounts">${amts.join('') || '<span class="amt">—</span>'}</div>
+    </div></li>`;
+  }).join('');
+}
+
+function renderCustomerDetail(name, rows) {
+  let charged = 0, paid = 0;
+  rows.forEach((t) => {
+    if (t.category === 'Credit Sale') charged += t.creditAmount;
+    if (t.category === 'Customer Payment') paid += t.cashIn + t.bankIn;
+  });
+  const balance = charged - paid;
+  $('detailSub').textContent = `${rows.length} transaction${rows.length === 1 ? '' : 's'}`;
+  $('detailListLabel').textContent = 'Statement';
+  $('detailSummary').innerHTML = `
+    <div class="total-card"><span class="label">Total Charged</span><span class="value" style="color:var(--amber)">${fmt(charged)}</span></div>
+    <div class="total-card in"><span class="label">Total Paid</span><span class="value">${fmt(paid)}</span></div>
+    <div class="total-card grand wide"><span class="label">Balance Owed</span><span class="value">${fmt(balance)}</span></div>`;
+  currentDetail.statement = { name, rows: rows.slice().sort(byDateAsc), charged, paid, balance };
+  if (!rows.length) { $('detailEmpty').hidden = false; $('shareBtn').hidden = true; return; }
+  $('detailList').innerHTML = rows.slice().sort(byDateDesc).map((t) => {
+    const opening = /opening/i.test(t.notes);
+    let amt = '';
+    if (t.category === 'Credit Sale') amt = `<span class="amt credit">+${fmt(t.creditAmount)}</span>`;
+    else if (t.category === 'Customer Payment') amt = `<span class="amt pay">−${fmt(t.cashIn + t.bankIn)}</span>`;
+    const label = opening ? 'Opening balance' : t.category;
+    const meta = fmtDate(t.date) + (t.notes && !opening ? ' · ' + esc(t.notes) : '');
+    return `<li><div class="tx">
+      <div class="tx-left"><div class="tx-cat">${esc(label)}</div><div class="tx-meta">${meta}</div></div>
+      <div class="tx-amounts">${amt}</div>
+    </div></li>`;
+  }).join('');
+}
+
+function buildStatement(s) {
+  let running = 0;
+  const body = s.rows.map((t) => {
+    const opening = /opening/i.test(t.notes);
+    let charge = '', payment = '', desc = '';
+    if (t.category === 'Credit Sale') { running += t.creditAmount; charge = fmt(t.creditAmount); desc = opening ? 'Opening balance' : 'Credit sale' + (t.notes ? ' — ' + esc(t.notes) : ''); }
+    else if (t.category === 'Customer Payment') { const p = t.cashIn + t.bankIn; running -= p; payment = fmt(p); desc = 'Payment received' + (t.notes ? ' — ' + esc(t.notes) : ''); }
+    else return '';
+    return `<tr><td>${fmtDate(t.date)}</td><td>${desc}</td><td class="num">${charge}</td><td class="num">${payment}</td><td class="num">${fmt(running)}</td></tr>`;
+  }).join('');
+  $('printArea').innerHTML = `
+    <h1>Burmelin Finance</h1>
+    <div class="ph-sub">Customer Statement — <strong>${esc(s.name)}</strong><br>Generated ${new Date().toLocaleDateString()}</div>
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th class="num">Charge</th><th class="num">Payment</th><th class="num">Balance</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr class="total-line"><td colspan="4">Balance Owed</td><td class="num">${fmt(s.balance)}</td></tr></tfoot>
+    </table>
+    <div class="ph-foot">Generated from Burmelin Finance records.</div>`;
+}
+
+$('backBtn').addEventListener('click', () => {
+  $('page-detail').hidden = true;
+  $('page-dashboard').hidden = false;
+});
+$('shareBtn').addEventListener('click', () => {
+  if (!currentDetail || currentDetail.kind !== 'customer' || !currentDetail.statement) return;
+  buildStatement(currentDetail.statement);
+  window.print();
+});
+$('shopList').addEventListener('click', (e) => { const el = e.target.closest('[data-shop]'); if (el) openDetail('shop', el.dataset.shop); });
+$('creditList').addEventListener('click', (e) => { const el = e.target.closest('[data-customer]'); if (el) openDetail('customer', el.dataset.customer); });
 
 // ---- record form ----
 function populateForm() {
@@ -222,7 +351,7 @@ $('txForm').addEventListener('submit', async (e) => {
 });
 
 let dashTimer = null;
-function loadDashboardSoon() { clearTimeout(dashTimer); dashTimer = setTimeout(loadDashboard, 400); }
+function loadDashboardSoon() { TX = null; clearTimeout(dashTimer); dashTimer = setTimeout(loadDashboard, 400); }
 
 let toastTimer = null;
 function showToast(msg, kind) {

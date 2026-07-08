@@ -19,6 +19,7 @@ app.use(express.static(__dirname));
 
 app.all('/api/dashboard', require('./api/dashboard'));
 app.all('/api/transaction', require('./api/transaction'));
+app.all('/api/transactions', require('./api/transactions'));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
