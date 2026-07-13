@@ -52,6 +52,18 @@ const fmt = (n) => '฿' + Math.round(n).toLocaleString('en-US');
 // ---- tabs ----
 document.querySelectorAll('.tab').forEach((btn) => {
   btn.addEventListener('click', () => {
+    if (editingRow !== null) {
+      editingRow = null;
+      $('saveBtn').textContent = 'Save Transaction';
+      $('editBanner').hidden = true;
+      $('fCategory').value = '';
+      $('amountFields').innerHTML = '';
+      $('ruleHint').textContent = '';
+      $('fNotes').value = '';
+      $('fDate').value = todayLocalISO();
+      $('rowCustomer').hidden = true;
+      $('rowShop').hidden = false;
+    }
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b === btn));
     $('page-dashboard').hidden = btn.dataset.page !== 'dashboard';
     $('page-record').hidden = btn.dataset.page !== 'record';
@@ -226,9 +238,9 @@ function renderDetail() {
     const opening = /opening/i.test(t.notes);
     const label = (kind === 'customer' && opening) ? 'Opening balance' : t.category;
     const meta = fmtDate(t.date) + (t.notes && !(kind === 'customer' && opening) ? ' · ' + esc(t.notes) : '');
-    return `<li><div class="tx">
+    return `<li><div class="tx tappable" data-row="${t.row}">
       <div class="tx-left"><div class="tx-cat">${esc(label)}</div><div class="tx-meta">${meta}</div></div>
-      <div class="tx-amounts">${amts.join('') || '<span class="amt">—</span>'}<span class="amt-run">${runLabel} ${fmt(t._run)}</span></div>
+      <div class="tx-amounts">${amts.join('') || '<span class="amt">—</span>'}<span class="amt-run">${runLabel} ${fmt(t._run)}</span><span class="chevron">›</span></div>
     </div></li>`;
   }).join('');
 }
@@ -367,21 +379,32 @@ $('txForm').addEventListener('submit', async (e) => {
   }
   if (!any) return showToast('Enter an amount', 'error');
 
+  const isEdit = editingRow !== null;
+  if (isEdit) body.row = editingRow;
+
   const btn = $('saveBtn');
-  btn.disabled = true; btn.textContent = 'Saving…';
+  btn.disabled = true; btn.textContent = isEdit ? 'Updating…' : 'Saving…';
   try {
-    const resp = await api('/api/transaction', { method: 'POST', body: JSON.stringify(body) });
+    const resp = await api('/api/transaction', {
+      method: isEdit ? 'PUT' : 'POST',
+      body: JSON.stringify(body),
+    });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Server error');
-    showToast(`Saved ✓ ${category} — ${body.shop}${data.mock ? ' (sample mode)' : ''}`, 'success');
-    // reset amounts + notes, keep category & shop for fast repeat entry
-    rule.fields.forEach((f) => { const el = $(`amt_${f}`); if (el) el.value = ''; });
-    $('fNotes').value = '';
-    loadDashboardSoon();
+    if (isEdit) {
+      showToast(`Updated ✓ ${category} — ${body.shop}${data.mock ? ' (sample mode)' : ''}`, 'success');
+      cancelEdit();
+      loadDashboardSoon();
+    } else {
+      showToast(`Saved ✓ ${category} — ${body.shop}${data.mock ? ' (sample mode)' : ''}`, 'success');
+      rule.fields.forEach((f) => { const el = $(`amt_${f}`); if (el) el.value = ''; });
+      $('fNotes').value = '';
+      loadDashboardSoon();
+    }
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
-    btn.disabled = false; btn.textContent = 'Save Transaction';
+    btn.disabled = false; btn.textContent = isEdit ? 'Update Transaction' : 'Save Transaction';
   }
 });
 
@@ -397,6 +420,71 @@ function showToast(msg, kind) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
 }
+
+// ---- edit transaction ----
+let editingRow = null;
+
+function startEdit(tx) {
+  editingRow = tx.row;
+  document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.page === 'record'));
+  $('page-dashboard').hidden = true;
+  $('page-detail').hidden = true;
+  $('page-record').hidden = false;
+  window.scrollTo(0, 0);
+
+  const isOpeningBalance = tx.category === 'Credit Sale' && /opening/i.test(tx.notes);
+  const catValue = isOpeningBalance ? 'Credit Opening Balance' : tx.category;
+  $('fCategory').value = catValue;
+  $('fCategory').dispatchEvent(new Event('change'));
+
+  $('fShop').value = tx.shop;
+  if (NEEDS_CUSTOMER.includes(catValue) || NEEDS_CUSTOMER.includes(tx.category)) {
+    $('fCustomer').value = tx.customer;
+  }
+  $('fDate').value = tx.date;
+  $('fNotes').value = isOpeningBalance && tx.notes.toLowerCase() === 'opening balance' ? '' : tx.notes;
+
+  const rule = RULES[catValue];
+  if (rule) {
+    rule.fields.forEach((f) => {
+      const el = $(`amt_${f}`);
+      if (el && tx[f]) el.value = tx[f];
+    });
+  }
+
+  $('saveBtn').textContent = 'Update Transaction';
+  $('editBanner').hidden = false;
+}
+
+function cancelEdit() {
+  editingRow = null;
+  $('saveBtn').textContent = 'Save Transaction';
+  $('editBanner').hidden = true;
+  $('fCategory').value = '';
+  $('amountFields').innerHTML = '';
+  $('ruleHint').textContent = '';
+  $('fNotes').value = '';
+  $('fDate').value = todayLocalISO();
+  $('rowCustomer').hidden = true;
+  $('rowShop').hidden = false;
+
+  if (currentDetail) {
+    $('page-record').hidden = true;
+    $('page-detail').hidden = false;
+    document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b.dataset.page === 'dashboard'));
+    openDetail(currentDetail.kind, currentDetail.name);
+  }
+}
+
+$('cancelEdit').addEventListener('click', cancelEdit);
+
+$('detailList').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-row]');
+  if (!el || !TX) return;
+  const row = parseInt(el.dataset.row, 10);
+  const tx = TX.find((t) => t.row === row);
+  if (tx) startEdit(tx);
+});
 
 // go
 loadDashboard();

@@ -28,7 +28,8 @@ const NEEDS_CUSTOMER = ['Credit Sale', 'Customer Payment'];
 
 module.exports = async function handler(req, res) {
   if (!checkPin(req, res)) return;
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  if (req.method === 'PUT') return handleUpdate(req, res);
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST or PUT only' });
 
   const b = req.body || {};
   const category = String(b.category || '');
@@ -113,3 +114,68 @@ module.exports = async function handler(req, res) {
     res.status(500).json({ error: 'Failed to write to spreadsheet: ' + err.message });
   }
 };
+
+async function handleUpdate(req, res) {
+  const b = req.body || {};
+  const row = parseInt(b.row, 10);
+  if (!row || row < 2 || row > 1000) return res.status(400).json({ error: 'Invalid row number' });
+
+  const category = String(b.category || '');
+  const shop = String(b.shop || '');
+  const customer = String(b.customer || '');
+  const notes = String(b.notes || '').slice(0, 200);
+  const date = String(b.date || '');
+
+  const amounts = {
+    cashIn: num(b.cashIn),
+    bankIn: num(b.bankIn),
+    cashOut: num(b.cashOut),
+    bankOut: num(b.bankOut),
+    creditAmount: num(b.creditAmount),
+  };
+
+  if (!RULES[category]) return res.status(400).json({ error: 'Unknown category: ' + category });
+  if (!shop) return res.status(400).json({ error: 'Shop is required' });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Date must be YYYY-MM-DD' });
+
+  const allowed = RULES[category];
+  const used = Object.entries(amounts).filter(([, v]) => v > 0).map(([k]) => k);
+  if (used.length === 0) return res.status(400).json({ error: 'Enter at least one amount' });
+  const illegal = used.filter((k) => !allowed.includes(k));
+  if (illegal.length) return res.status(400).json({ error: `${category} cannot use: ${illegal.join(', ')}` });
+  if (Object.values(amounts).some((v) => v < 0)) return res.status(400).json({ error: 'Amounts must be positive' });
+
+  if (NEEDS_CUSTOMER.includes(category)) {
+    if (!customer) return res.status(400).json({ error: 'Pick a credit customer for ' + category });
+    if (shop !== 'Palladium') return res.status(400).json({ error: 'Credit rows must use Shop = Palladium' });
+  }
+
+  const [y, m, d] = date.split('-').map(Number);
+  const sheetDate = `${m}/${d}/${y}`;
+
+  if (MOCK) return res.json({ ok: true, mock: true, row, echo: { sheetDate, shop, customer, category, ...amounts, notes } });
+
+  try {
+    const sheets = getSheetsClient();
+    const rowValues = [[
+      sheetDate, shop,
+      NEEDS_CUSTOMER.includes(category) ? customer : '',
+      category, null,
+      amounts.cashIn || '', amounts.bankIn || '',
+      amounts.cashOut || '', amounts.bankOut || '',
+      amounts.creditAmount || '', 'App', notes,
+    ]];
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `'Master Entry'!A${row}:L${row}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: rowValues },
+    });
+
+    res.json({ ok: true, row });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update spreadsheet: ' + err.message });
+  }
+}

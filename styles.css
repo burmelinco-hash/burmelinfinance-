@@ -177,8 +177,24 @@ body {
 .tx .amt.credit { color: var(--amber); }
 .tx .amt.pay { color: var(--green); }
 
+.tx.tappable { cursor: pointer; }
+.tx.tappable:active { background: #f9fafb; }
+.tx .chevron { color: var(--muted); font-weight: 700; margin-left: 6px; }
+
 .share-btn { background: var(--green); margin-top: 4px; }
 .share-btn:active { background: #046c4e; }
+
+.edit-banner {
+  background: #dbeafe; color: var(--blue-dark); border: 1px solid #93c5fd;
+  border-radius: 10px; padding: 10px 14px; font-size: 14px; font-weight: 600;
+  margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;
+}
+.cancel-edit-btn {
+  background: none; border: 1.5px solid var(--blue); color: var(--blue);
+  border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.cancel-edit-btn:active { background: rgba(26,86,219,.1); }
 
 /* ---------- print statement ---------- */
 .print-only { display: none; }
